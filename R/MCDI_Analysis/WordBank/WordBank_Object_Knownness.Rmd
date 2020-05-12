@@ -1,0 +1,164 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+# Add packages
+library(ggplot2)
+```
+
+```{r}
+# Read WordBank data for target objects
+wb_object_knowness = read.csv("wordbank_item_trajectory_table.csv")
+
+# Read MCDI results
+RawMCDI = read.csv("MCDI_20190906.csv",as.is = TRUE)
+
+```
+
+```{r}
+# Get data for 8-10 mo
+wb_target_ages = wb_object_knowness[c(1:3),]
+wb_target_ages
+```
+
+```{r}
+# Get the means across age range
+colMeans(wb_target_ages[,-c(1:4)])
+```
+
+```{r}
+# Create df
+population_object_knownness = sort(colMeans(wb_target_ages[,-c(1:4)]),decreasing = TRUE)
+df = as.data.frame(population_object_knownness)
+df[,2] = c('bottle', 'dog', 'book','baby','cat','shoe','spoon','hand')
+colnames(df)[2] = 'obj'
+df
+```
+
+
+```{r}
+# Plot object Known-ness in Population
+ggplot(data=df, aes(x=obj, y=population_object_knownness, fill=obj)) +
+  geom_bar(stat="identity")+ 
+  #scale_x_discrete(limits=df[,2])+
+  ggtitle("Average Proportion of Infants Understanding Target Words for Ages 8-10 Months")+
+  labs(subtitle="from WordBank")+
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5))+
+  labs(x = "Object", y = "Proportion of Children Understanding")+ 
+  ylim(0,1)+
+  theme(legend.title = element_blank()) +
+  geom_text(aes(obj, population_object_knownness+0.015, label = round(population_object_knownness,3)), color = "black", size = 3)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.1))
+
+
+```
+
+
+```{r}
+# Prepare MCDI dataset
+Info = RawMCDI[,c(7,8,18)]
+Questions = RawMCDI[,26:421]
+questionsBool = Questions[-c(1,2),]
+babyCodes = RawMCDI$Q2[-c(1,2)]
+questionsBool = questionsBool!=""
+
+# Reassemble dataset
+Data = cbind(Info, Questions)
+# Delete redundant row of extra labels
+Data = Data[-2,]
+# Change to Boolean
+Data[2:21,4:length(Data)] = Data[2:21,4:length(Data)]!=""
+
+# Format and relabel
+Data_studybabies = Data
+old_colnames = colnames(Data_studybabies)
+colnames(Data_studybabies) = Data_studybabies[1,]
+colnames(Data_studybabies)[3] = 'ID'
+Data_studybabies[2,3] = 'SD104'
+Data_studybabies=Data_studybabies[-1,]
+Data_studybabies= Data_studybabies[order(Data_studybabies$ID),]
+Data_studybabies[10,3] = 'SD124'
+
+# Get relevant babies
+babies = c('SD102', 'SD107', 'SD108', 'SD114', 'SD118', 'SD120', 'SD124', 'SD126', 'SD127', 'SD130', 'SD133', 'SD138', 'SD141', 'SD139')
+get_babies = Data_studybabies$ID%in%babies
+Data_studybabies= Data_studybabies[get_babies,]
+rownames(Data_studybabies)=c(1:14)
+
+# Swap order of SD 139 and SD 141 for consistancy becasue they correspond to idec 41 and 40 respectively
+X = Data_studybabies[14,]
+Data_studybabies[14,]=Data_studybabies[13,]
+Data_studybabies[13,]=X
+
+objects = c("baby","book", "bottle","cat", "dog", "hand","shoe","spoon")
+columns = c("Q37_2","Q27_4", "Q35_2","Q23_8", "Q23_12", "Q32_10","Q31_15","Q35_30")
+
+# Get vocab sizes
+allMCDI_studybabies = Data_studybabies
+rownames(allMCDI_studybabies) = allMCDI_studybabies[,3]
+allMCDI_studybabies = allMCDI_studybabies[,-c(1,2,3)]
+allMCDI_studybabies = (allMCDI_studybabies=='TRUE')
+vocab_studybabies = rowSums(allMCDI_studybabies)
+vocab_studybabies
+
+# Get target object data
+desiredCols = old_colnames %in% columns
+colnames(Data_studybabies)[desiredCols] # sanity check
+targetObjectData = as.vector(Data_studybabies[,desiredCols])
+orderedCols = colnames(targetObjectData)
+orderedObjects = c("cat", "dog", "book","shoe", "hand", "bottle", "spoon", "baby" )
+targetObjectData = targetObjectData=="TRUE"
+colnames(targetObjectData)=orderedObjects
+
+# Get object known-ness in sample
+objectCounts = colSums(targetObjectData)
+objectProportions = colMeans(targetObjectData)
+objectProportions
+```
+
+```{r}
+# Create df
+sample_object_knownness = sort(colMeans(targetObjectData),decreasing = TRUE)
+df2 = as.data.frame(sample_object_knownness)
+df2[,2] = row.names(df2)
+colnames(df2)[2] = 'obj'
+df2
+```
+
+```{r}
+#Plot Object Known-ness in Sample
+ggplot(data=df2, aes(x=obj, y=sample_object_knownness, fill=obj)) +
+  geom_bar(stat="identity")+ 
+  #scale_x_discrete(limits=df2[,2])+
+  ggtitle("Proportion of Infants Understanding Target Words for Ages 7-10 Months")+
+  labs(subtitle="from Sample")+
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5))+
+  labs(x = "Object", y = "Proportion of Children Understanding")+ 
+  ylim(0,1)+
+  theme(legend.title = element_blank()) +
+  geom_text(aes(obj, sample_object_knownness+0.015, label = round(sample_object_knownness,3)), color = "black", size = 3)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black", size = 0.1))
+
+```
+
+
+```{r}
+# Are population known-ness and sample known-ness different?
+pop_t = population_object_knownness
+names(pop_t) = c('bottle','dog','book','baby','cat','shoe','spoon','hand')
+pop_t = pop_t[order(names(pop_t))]
+sam_t = sample_object_knownness
+sam_t = sam_t[order(names(sam_t))]
+
+t.test(sam_t,pop_t)
+# Ans: NO
+```
+

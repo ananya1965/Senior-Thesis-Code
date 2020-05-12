@@ -1,0 +1,127 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+# Add packages
+library(ggplot2)
+```
+
+```{r}
+# Read MCDI results
+RawMCDI = read.csv("MCDI_20190906.csv",as.is = TRUE)
+
+# Read WordBank data for vocabulary norms
+vocab_norms = read.csv("vocabulary_norms_data.csv")
+
+```
+
+```{r}
+# Prepare MCDI dataset
+Info = RawMCDI[,c(7,8,18)]
+Questions = RawMCDI[,26:421]
+questionsBool = Questions[-c(1,2),]
+babyCodes = RawMCDI$Q2[-c(1,2)]
+questionsBool = questionsBool!=""
+
+# Reassemble dataset
+Data = cbind(Info, Questions)
+# Delete redundant row of extra labels
+Data = Data[-2,]
+# Change to Boolean
+Data[2:21,4:length(Data)] = Data[2:21,4:length(Data)]!=""
+
+# Format and relabel
+Data_studybabies = Data
+old_colnames = colnames(Data_studybabies)
+colnames(Data_studybabies) = Data_studybabies[1,]
+colnames(Data_studybabies)[3] = 'ID'
+Data_studybabies[2,3] = 'SD104'
+Data_studybabies=Data_studybabies[-1,]
+Data_studybabies= Data_studybabies[order(Data_studybabies$ID),]
+Data_studybabies[10,3] = 'SD124'
+
+# Get relevant babies
+babies = c('SD102', 'SD107', 'SD108', 'SD114', 'SD118', 'SD120', 'SD124', 'SD126', 'SD127', 'SD130', 'SD133', 'SD138', 'SD141', 'SD139')
+get_babies = Data_studybabies$ID%in%babies
+Data_studybabies= Data_studybabies[get_babies,]
+rownames(Data_studybabies)=c(1:14)
+
+# Swap order of SD 139 and SD 141 for consistancy becasue they correspond to idec 41 and 40 respectively
+X = Data_studybabies[14,]
+Data_studybabies[14,]=Data_studybabies[13,]
+Data_studybabies[13,]=X
+
+objects = c("baby","book", "bottle","cat", "dog", "hand","shoe","spoon")
+columns = c("Q37_2","Q27_4", "Q35_2","Q23_8", "Q23_12", "Q32_10","Q31_15","Q35_30")
+
+# Get vocab sizes
+allMCDI_studybabies = Data_studybabies
+rownames(allMCDI_studybabies) = allMCDI_studybabies[,3]
+allMCDI_studybabies = allMCDI_studybabies[,-c(1,2,3)]
+allMCDI_studybabies = (allMCDI_studybabies=='TRUE')
+vocab_studybabies = rowSums(allMCDI_studybabies)
+vocab_studybabies
+```
+
+```{r}
+# Create df
+sample_object_knownness = sort(colMeans(targetObjectData),decreasing = TRUE)
+df2 = as.data.frame(sample_object_knownness)
+df2[,2] = row.names(df2)
+colnames(df2)[2] = 'obj'
+df2
+```
+
+```{r}
+# Get vocab sizes in target age range
+vocab_norms=vocab_norms[order(vocab_norms$age),]
+vocab_norms_age_range = vocab_norms[(vocab_norms$age%in%c(7:10)),]
+vocab_norms_age_range
+summary(vocab_norms_age_range$vocab)
+
+```
+
+
+```{r}
+# Boxplot of vocab sizes from Wordbank
+boxplot((vocab_norms_age_range$vocab), horizontal = TRUE)
+boxplot(vocab_norms_age_range$vocab, horizontal = TRUE, xlab = "Number of Words", frame.plot = FALSE, main = "Vocabulary Sizes for Infants of Age 8-10 Months (WordBank)", outline = FALSE, ylim = c(0,140))
+
+#text(x=fivenum(vocab_norms_age_range$vocab), labels =fivenum(vocab_norms_age_range$vocab), y=1.25)
+text(x = boxplot.stats(vocab_norms_age_range$vocab)$stats, labels = boxplot.stats(vocab_norms_age_range$vocab)$stats, y = 1.23, cex = 0.8)
+
+```
+
+```{r}
+# Boxplot of vocab sizes from WordBank and sample
+boxplot(vocab_norms_age_range$vocab, vocab_studybabies,
+at = c(.75,2.25),
+names = c("MCDI", "Sample"),
+las = 2,
+horizontal = TRUE,
+xlab = "Number of Words", main = "Vocabulary Sizes for Infants of Age 8-10 Months (WordBank)", outline = FALSE, ylim = c(0,140), xlim = c(0,3)
+)
+
+text(x = boxplot.stats(vocab_norms_age_range$vocab)$stats, labels = boxplot.stats(vocab_norms_age_range$vocab)$stats, y = 1.25, cex = 0.8)
+text(x = boxplot.stats(vocab_studybabies)$stats, labels = boxplot.stats(vocab_studybabies)$stats, y = 2.75, cex = 0.8)
+
+```
+
+```{r}
+# Boxplot of vocab sizes from WordBank and sample with log transforms
+boxplot(log(vocab_norms_age_range$vocab), log(vocab_studybabies),
+at = c(.75,2.25),
+names = c("MCDI", "Sample"),
+las = 2,
+horizontal = TRUE,
+xlab = "log(Number of Words)", main = "Vocabulary Sizes for Infants of Age 8-10 Months (WordBank)", outline = FALSE, ylim = c(0,7), xlim = c(0,3)
+)
+
+text(x = boxplot.stats(log(vocab_norms_age_range$vocab))$stats, labels = boxplot.stats(vocab_norms_age_range$vocab)$stats, y = 1.25, cex = 0.6)
+text(x = boxplot.stats(log(vocab_studybabies))$stats, labels = boxplot.stats(vocab_studybabies)$stats, y = 2.75, cex = 0.6)
+
+```

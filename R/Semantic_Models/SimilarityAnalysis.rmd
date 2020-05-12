@@ -1,0 +1,350 @@
+---
+title: "Comparing Metrics of Semantic Relatedness"
+subtitle: "Analysis of Semantic Similarity Between Target Objects Using Different Representational Similarity Metrics"
+output:
+  pdf_document:
+    df_print: kable 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+geometry: margin=.75in
+editor_options:
+  tidy: yes
+---
+
+
+
+```{r}
+# add packages
+library(reshape2)
+library(ggplot2)
+```
+
+## **Feature Norms**
+
+Data Source: McRae, Cree, Seidenberg & McNorgan (2005)
+```{r}
+FN =read.csv(file = 'FeatureNorms.csv')
+head(FN)
+```
+
+```{r}
+# extract relevant cols
+cFN = FN[,c(1,2,3,6)]
+names(cFN) = c("Concept", "Feature", "F_Type", "F_Class")
+head(cFN,10)
+```
+
+
+```{r}
+# extract relevant features based on prior research
+ccFN = cFN[cFN$F_Class!='taxonomic',]
+ccFN = ccFN[ccFN$F_Class!='encyclopaedic',]
+head(ccFN,10)
+```
+
+```{r}
+# contruct vector of target object names
+obs = c('book','bottle','cat','dog','shoes','spoon')
+
+# extract data for each object
+book = ccFN[ccFN$Concept=='book',]
+bottle = ccFN[ccFN$Concept=='bottle',]
+dog = ccFN[ccFN$Concept=='dog',]
+cat = ccFN[ccFN$Concept=='cat',]
+shoes = ccFN[ccFN$Concept=='shoes',]
+spoon = ccFN[ccFN$Concept=='spoon',]
+
+# construct vector of features for each obj
+fBook = as.vector(book[,2])
+fBottle = as.vector(bottle[,2])
+fDog = as.vector(dog[,2])
+fCat = as.vector(cat[,2])
+fShoes = as.vector(shoes[,2])
+fSpoon = as.vector(spoon[,2])
+
+# get the set of unique features
+featureSet = unique(sort(c(fBook, fBottle, fDog, fCat, fShoes, fSpoon)))
+head(featureSet)
+```
+
+```{r}
+# construct a FNs x Objects boolean df
+OxFN = data.frame("Book" = featureSet%in%fBook,   "Bottle" = featureSet%in%fBottle, 
+                  "Cat" = featureSet%in%fCat,     "Dog"=featureSet%in%fDog, 
+                  "Shoes" = featureSet%in%fShoes, "Spoon"= featureSet%in%fSpoon, 
+                  row.names = featureSet)
+head(OxFN,10)
+```
+
+```{r}
+# get correlation matrix for FNs of target objs
+OxFN.cor = cor(OxFN)
+as.data.frame(OxFN.cor)
+```
+
+```{r}
+# format data for visualization
+cors <- OxFN.cor
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+FN.plot <- ggplot(cor_data, aes(objects1, objects2, fill = correlation)) +
+  geom_tile(color = "white")+ ggtitle("Correlation across Objects for Feature Norms")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "orange", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", name="R-Values")+
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3)+
+coord_fixed()
+FN.plot
+```
+
+## **WordNet Path Similarity**
+
+Data Source: Princeton University "About WordNet." WordNet. Princeton University. 2010. 
+
+```{r}
+# Read in WordNet path similarities and format data
+WN =read.csv(file = 'cWordNetSimilarities.csv',row.names = 1)
+head(WN)
+WN.cor = as.matrix(WN)
+as.data.frame(WN.cor)
+```
+
+```{r}
+# contruct vector of target object names
+obs = c('baby','bottle','book','cat','dog','hand','shoes','spoon')
+```
+
+```{r}
+# format data for visualization
+cors <- WN.cor
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+WN.plot <- ggplot(cor_data, aes(objects1, objects2, fill = correlation))+
+  geom_tile(color = "white")+ ggtitle("Similarity Between Objects in WordNet")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "firebrick2",
+                       midpoint = 0.175, limit = c(0.05,.3), space = "Lab", name="Path Similarity",na.value = "firebrick3")+
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  #geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3)+ # uncomment to show path lengths
+coord_fixed()
+WN.plot
+```
+
+## **Co-occurance in CHILDES**
+direc
+Data Source: Dr. Thomas Hills and Eva Jimenez
+
+```{r}
+CC = read.csv(file = 'cooccuranceCHILDES.csv')
+head(CC)
+```
+
+```{r}
+# extract relevant cols
+cCC = CC[,]
+objects = c('X','baby', 'book','bottle','cat','dog','hand','shoe','spoon')
+getCols = colnames(CC)%in%objects
+cCC=cCC[,getCols]
+head(cCC,10)
+
+# extract relevant rows
+getRows = cCC$X%in%objects
+cCC=cCC[getRows,]
+
+# reformat df
+rownames(cCC) = cCC$X
+cCC = cCC[,-1]
+cCC
+```
+
+```{r}
+# Reflect matrix along its diagonal to get a symmetric matrix
+combinedCC = cCC
+
+for (i in c(1:8))
+  {
+  for (j in c(1:8))
+    {
+    if (i!=j)
+      {
+      combinedCC[i,j]=cCC[i,j]+cCC[j,i]}
+      }
+  }
+
+```
+
+```{r}
+# format for visualization
+cCC.cor = as.matrix(combinedCC)
+cors <- cCC.cor
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+# plot 
+CC.plot <- ggplot(cor_data, aes(objects1, objects2, fill = log(correlation))) +
+  geom_tile(color = "white")+ ggtitle("Co-occurance in CHILDES")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "firebrick2", midpoint = 6, 
+                       limit = log(c(1,4668)), space = "Lab", na.value = "white", name="Co-occurance\nFrequency") +
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3) +
+coord_fixed()
+CC.plot
+```
+
+
+```{r}
+# normalize by frequency of the words
+coocFreq = colSums(combinedCC)
+ncCC=combinedCC/coocFreq
+ncCC = t(ncCC)/coocFreq
+ncCC = ncCC*100000
+ncCC
+```
+
+```{r}
+# format for visualization
+ncCC.cor = as.matrix(ncCC)
+cors <- ncCC.cor
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+CC.plot <- ggplot(cor_data, aes(objects1, objects2, fill = log(correlation))) +
+  geom_tile(color = "white")+ ggtitle("Co-occurance in CHILDES")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "firebrick2", midpoint = 2, 
+                       limit = c(-2,5), space = "Lab", na.value = "white", name="Co-occurance\nFrequency") +
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3) +
+coord_fixed()
+CC.plot
+```
+
+## **CHILDES: Transformed into Similarity Space Using SVD**
+
+```{r}
+#Transforming CHILDES: Ananya 
+CC = read.csv(file = 'cooccuranceCHILDES.csv')
+rownames(CC) = CC[,1]
+CC = CC[,-1]
+CC
+objects = c('baby','bottle','book','cat','dog','hand','shoe','spoon')
+
+# create matrix
+var_idx = which(colnames(CC) %in% objects) # get object indices
+c_mat = t(CC[var_idx,]) # objects x all_words
+dim(c_mat) # check dimensions
+
+# without SVD
+CHILDES_corr = cor(c_mat, method = "spearman")
+colnames(CHILDES_corr)= colnames(CC)[var_idx]
+rownames(CHILDES_corr)= colnames(CC)[var_idx]
+#write.csv(CHILDES_corr, file="ChildesSimilarities_Corr.csv")
+
+# perform svd
+c_mat.svd = svd(c_mat) 
+u = c_mat.svd$u
+vt = c_mat.svd$v
+sin_vals = c_mat.svd$d
+
+# get k
+explained_var = cumsum(sin_vals^2/sum(sin_vals^2))
+plot(explained_var)
+k = 4
+# first 4 singular values capture the highest variance and therefore the most information
+
+# reconstruct original matrix for k most significant singular values
+# principle component analysis (basically)
+vt = vt[1:k,]
+u = u[,1:k]
+sin_vals = diag(sin_vals[1:k])
+t1 = u %*% sin_vals
+t2 = t1 %*% vt
+reconstructed_cmat = t2
+
+# get correlation matrix
+CHILDES_SVD_corr = cor(reconstructed_cmat, method = "spearman")
+colnames(CHILDES_SVD_corr)= colnames(CC)[var_idx]
+rownames(CHILDES_SVD_corr)= colnames(CC)[var_idx]
+#write.csv(CHILDES_corr, file="ChildesSimilarities_SVD_4.csv")
+CHILDES_SVD_corr
+```
+
+```{r}
+# format data for visualization
+cors <- CHILDES_SVD_corr
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+CC_SVD.plot <- ggplot(cor_data, aes(objects1, objects2, fill = correlation)) +
+  geom_tile(color = "white")+ ggtitle("Similarity Between Objects in CHILDES, with SVD (k=4)")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "firebrick2", 
+                       midpoint = 0.5, limit = c(-1,.99999999), space = "Lab", name="Correlations of \nCo-occurrence \nVectors", na.value = "firebrick3")+
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  #geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3)+
+coord_fixed()
+CC_SVD.plot
+```
+
+
+## **Neural Representation**
+
+Data Source: Princeton Baby Lab Consortium Project fNRIS dataset 
+
+```{r}
+neural_rsm = read.csv(file = "mean_neural_RSM.csv", header = FALSE)
+neural.cor = as.matrix(neural_rsm)
+as.data.frame(neural.cor)
+```
+
+```{r}
+# contruct vector of target object names
+obs = c('baby','bottle','book','cat','dog','hand','shoes','spoon')
+colnames(neural.cor) = obs
+rownames(neural.cor) = obs
+```
+
+```{r}
+# format data for visualization
+cors <- neural.cor
+cor_data <- reshape2::melt(cors, varnames = paste0("objects", 1:2), value.name = "correlation")
+```
+
+```{r}
+neural.plot <- ggplot(cor_data, aes(objects1, objects2, fill = correlation))+
+  geom_tile(color = "white")+ ggtitle("Similarity Between Objects Representations in the Brain")+
+  scale_fill_gradient2(low = "yellow", high = "firebrick3", mid = "firebrick2",
+                       midpoint = -.095, limit = c(-0.15,-0.04), space = "Lab", name="Correlations of \nChannel \nRepresentations", na.value = "firebrick3")+
+  theme_minimal()+ 
+  theme(axis.title.x = element_blank(),axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 1, size = 9, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size=11, face='bold'))+
+  #geom_text(aes(objects1, objects2, label = round(correlation,3)), color = "black", size = 3)+
+coord_fixed()
+neural.plot
+```
+
+
+

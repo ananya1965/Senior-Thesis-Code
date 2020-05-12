@@ -1,0 +1,510 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+
+```{r}
+# Add packages
+library(igraph)
+#library(tcltk)
+```
+
+```{r}
+# Read in MCDI data
+RawMCDI = read.csv("MCDI_20190906_relabeled.csv",as.is = TRUE)
+RawMCDI
+```
+
+```{r}
+## Prepare dataset
+Info = RawMCDI[,c(7,8,18)]
+Info
+
+Questions = RawMCDI[,26:421]
+Questions
+questionsBool = Questions[-c(1,2),]
+questionsBool = questionsBool!=""
+questionsBool
+babyCodes = RawMCDI$Q2[-c(1,2)]
+babyCodes
+
+# Reassemble dataset
+Data = cbind(Info, Questions)
+Data
+
+# Delete redundant row of extra labels
+Data = Data[-1,]
+Data
+
+# Change to Boolean
+colnames(Data) = Data[1,]
+Data = Data[-1,]
+Data[,4:length(Data)] = Data[,4:length(Data)]!=""
+Data
+Objects = Data[,-c(1:3)]
+rownames(Objects)=Data$Participant_ID
+Objects
+Objects = Objects[ , order(names(Objects))]
+rownames(Objects)[1] = 'SD104'
+rownames(Objects)[12] = 'SD124'
+Objects = Objects[order(rownames(Objects)),]
+Objects
+```
+
+```{r}
+# remove subject who were not in the final dataset
+study_babies = c('SD102', 'SD107', 'SD108', 'SD114', 'SD118', 'SD120', 'SD124', 'SD126', 'SD127', 'SD130', 'SD133', 'SD138', 'SD141', 'SD139')
+getBabies = rownames(Objects)%in%study_babies
+Objects_study_babies = Objects[getBabies,]
+Objects_study_babies
+```
+
+```{r}
+Data_studybabies = Data
+old_colnames = colnames(Data_studybabies)
+colnames(Data_studybabies) = Data_studybabies[1,]
+colnames(Data_studybabies)[3] = 'ID'
+Data_studybabies[2,3] = 'SD104'
+Data_studybabies=Data_studybabies[-1,]
+Data_studybabies= Data_studybabies[order(Data_studybabies$ID),]
+Data_studybabies
+Data_studybabies[10,3] = 'SD124'
+
+Data_studybabies
+
+# Get relevant babies - remove those who did not complete the MCDI
+babies = c('SD102', 'SD107', 'SD108', 'SD114', 'SD118', 'SD120', 'SD124', 'SD126', 'SD127', 'SD130', 'SD133', 'SD138', 'SD141', 'SD139')
+get_babies = Data_studybabies$ID%in%babies
+Data_studybabies= Data_studybabies[!get_babies,]
+rownames(Data_studybabies)=c(1:14)
+Data_studybabies
+
+allMCDI_studybabies = Data_studybabies
+rownames(allMCDI_studybabies) = allMCDI_studybabies[,3]
+allMCDI_studybabies = allMCDI_studybabies[,-c(1,2,3)]
+allMCDI_studybabies = (allMCDI_studybabies=='TRUE')
+vocab_studybabies = rowSums(allMCDI_studybabies)
+vocab_studybabies
+```
+
+
+```{r}
+baby1 = colnames(Objects_study_babies)[as.logical(Objects_study_babies[12,])]
+baby1=sort(baby1)
+baby1
+```
+
+
+```{r}
+CC = read.csv(file = 'cooccuranceCHILDES.csv')
+rownames(CC) = CC$X
+CC
+CC = CC[,-1]
+CC
+```
+
+```{r}
+# Sample: Get known words for baby 1
+baby1
+baby1%in%colnames(CC)
+baby1[baby1%in%colnames(CC)]
+colnames(CC)[colnames(CC)%in%baby1]
+baby1_matrix=CC[rownames(CC)%in%baby1,colnames(CC)%in%baby1]
+
+```
+
+
+```{r}
+a = CC[,colnames(CC)%in%colnames(Objects_study_babies)]
+b = Objects_study_babies[,colnames(Objects_study_babies)%in%colnames(CC)]
+
+baby1 = a[,as.logical(b[1,])]
+baby1[rownames(baby1)%in%colnames(baby1),]
+```
+
+```{r}
+babysubset = CC[rownames(CC)%in%baby1,colnames(CC)%in%baby1]
+babymatrix = as.matrix(babysubset)
+babymatrix
+```
+
+```{r}
+contextual_diversity = colSums(babysubset)+rowSums(babysubset)
+```
+
+```{r}
+babygraph = graph_from_adjacency_matrix(babymatrix, weighted=TRUE, mode="plus")
+E(babygraph)
+```
+
+```{r}
+plot(babygraph, vertex.size = 20, vertex.color="SkyBlue2",vertex.frame.color=NA,vertex.label.cex = .9,vertex.label.color="black", edge.arrow.size = 0,edge.curve=TRUE,edge.label=E(babygraph)$weight,edge.label.cex = .7,edge.label.color="black")
+#babygraph 
+```
+
+```{r}
+similarity(babygraph,vids=V(babygraph))
+```
+
+```{r}
+# The density of a graph is the ratio of the number of edges and the number of possible edges.
+edge_density(babygraph)
+
+# The edge connectivity of a graph or two vertices, this is recently also called group adhesion.
+# The edge connectivity of a graph is the minimum of the edge connectivity of every (ordered) pair of vertices in the graph. edge_connectivity calculates this quantity if neither the source nor the target arguments are given (ie. they are both NULL).
+# The adhesion of a graph is the minimum number of edges needed to remove to obtain a graph which is not strongly connected. This is the same as the edge connectivity of the graph.
+edge.connectivity(babygraph)
+
+
+# The eccentricity of a vertex is its shortest path distance from the farthest other node in the graph.
+# The eccentricity of a vertex is calculated by measuring the shortest distance from (or to) the vertex, to (or from) all vertices in the graph, and taking the maximum.
+# This implementation ignores vertex pairs that are in different components. Isolate vertices have eccentricity zero.
+eccentricity(babygraph, vids = V(babygraph))
+
+# Calculates a measure of diversity for all vertices.
+# The diversity of a vertex is defined as the (scaled) Shannon entropy of the weights of its incident edges:
+#     D(i)=H(i)/log(k[i])
+#
+#     and
+#
+#    H(i) = -sum(p[i,j] log(p[i,j]), j=1..k[i]),
+#
+#    where
+#
+#    p[i,j] = w[i,j] / sum(w[i,l], l=1..k[i]),
+#
+#    and k[i] is the (total) degree of vertex i, w[i,j] is the weight of the edge(s) between vertices i and j.
+#
+# For vertices with degree less than two the function returns NaN.
+
+diversity(babygraph, weights = NULL, vids = V(babygraph))
+
+
+# distances calculates the length of all the shortest paths from or to the vertices in the network. shortest_paths calculates one shortest path (the path itself, and not just its length) from or to the given vertex.
+# The shortest path, or geodesic between two pair of vertices is a path with the minimal number of vertices. The functions documented in this manual page all calculate shortest paths between vertex pairs.
+
+#mean_distance calculates the average path length in a graph, by calculating the shortest paths between all pairs of vertices (both ways for directed graphs). This function does not consider edge weights currently and uses a breadth-first search.
+mean_distance(babygraph, directed = FALSE, unconnected = FALSE)
+average.path.length(babygraph)
+
+# distances calculates the lengths of pairwise shortest paths from a set of vertices (from) to another set of vertices (to). It uses different algorithms, depending on the algorithm argument and the weight edge attribute of the graph. The implemented algorithms are breadth-first search (‘unweighted’), this only works for unweighted graphs; the Dijkstra algorithm (‘dijkstra’), this works for graphs with non-negative edge weights; the Bellman-Ford algorithm (‘bellman-ford’), and Johnson's algorithm (‘"johnson"’). The latter two algorithms work with arbitrary edge weights, but (naturally) only for graphs that don't have a negative cycle.
+distances(babygraph)
+mean(distances(babygraph))
+
+#The degree of a vertex is its most basic structural property, the number of its adjacent edges.
+degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE)
+mean(degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE))
+
+# The vertex connectivity of a graph or two vertices, this is recently also called group cohesion.
+# The vertex connectivity of a graph is the minimum vertex connectivity of all (ordered) pairs of vertices in the graph. In other words this is the minimum number of vertices needed to remove to make the graph not strongly connected. (If the graph is not strongly connected then this is zero.) vertex_connectivity calculates this quantitty if neither the source nor target arguments are given. (Ie. they are both NULL.)
+vertex_connectivity(babygraph, source = NULL, target = NULL, checks = TRUE)
+# The cohesion of a graph (as defined by White and Harary, see references), is the vertex connectivity of the graph. This is calculated by cohesion.
+cohesion(babygraph)
+
+
+# Two vertices are cocited if there is another vertex citing both of them. cocitation siply counts how many types two vertices are cocited. The bibliographic coupling of two vertices is the number of other vertices they both cite, bibcoupling calculates this.
+cocitation(babygraph, v = V(babygraph))
+
+
+# clusters
+# Calculate the maximal (weakly or strongly) connected components of a graph
+# For components a named list with three components:
+#     membership	
+#       numeric vector giving the cluster id to which each vertex belongs.
+#     csize	
+#       numeric vector giving the sizes of the clusters.
+#     no	
+#       numeric constant, the number of clusters.
+components(babygraph)
+# For count_components an integer constant is returned.
+count_components(babygraph)
+
+
+# closeness
+# Cloness centrality measures how many steps is required to access every other vertex from a given vertex.
+#The closeness centrality of a vertex is defined by the inverse of the average length of the shortest paths to/from all the other vertices in the graph:
+closeness(babygraph, vids = V(babygraph), weights = NULL, normalized = FALSE)
+
+
+# The vertex and edge betweenness are (roughly) defined by the number of geodesics (shortest paths) going through a vertex or an edge.
+betweenness(babygraph, v = V(babygraph), directed = FALSE, weights = NULL, normalized = FALSE)
+edge_betweenness(babygraph, e = E(babygraph), directed = FALSE, weights = NULL)
+```
+
+
+```{r}
+E(babygraph)
+```
+
+```{r}
+graph_parameters_babies = data.frame(edge_densities = numeric(),
+                                     edge_connectivities = numeric(),
+                                     eccentricities = numeric(),
+                                     diversities = numeric(),
+                                     mean_path_lengths = numeric(),
+                                     distances = matrix(),
+                                     mean_distances = numeric(),
+                                     degrees = numeric(),
+                                     mean_degrees = numeric(),
+                                     vertex_connectivities = numeric(),
+                                     cohesions = numeric(),
+                                     cocitations = matrix(),
+                                     component = list(),
+                                     component_counts = numeric(),
+                                     closenesss = numeric(),
+                                     vertex_betweenness = numeric(),
+                                     edge_betweennesss = numeric())
+                                  
+
+```
+
+```{r}
+create_empty_table <- function(num_rows, num_cols) {
+    frame <- data.frame(matrix(NA, nrow = num_rows, ncol = num_cols))
+    return(frame)
+}
+```
+
+```{r}
+graph_parameters_babies = create_empty_table(14,26)
+colnames(graph_parameters_babies) = c('edge_density',
+                                     'edge_connectivity',
+                                     #'eccentricity',
+                                     'mean_eccentricity', #
+                                     #'diversity',
+                                     'mean_diversity', #
+                                     'mean_path_length',
+                                     'distance',
+                                     'mean_distance',
+                                     #'degree',
+                                     #'normalized_degree',
+                                     'normalized_mean_degree', #
+                                     'mean_degree',
+                                     'vertex_connectivity',
+                                     'cohesion',
+                                     #'cocitation',
+                                     'mean_cocitation',#
+                                     #'strength',#
+                                     'mean_strength',#
+                                     #'component',
+                                     'component_count',
+                                     #'closeness',
+                                     #'normalized_closeness',
+                                     'normalized_mean_closeness',#
+                                     'mean_closeness',#
+                                     #'vertex_betweenness',
+                                     #'normalized_vertex_betweenness',
+                                     'mean_vertex_betweenness',#                                     
+                                     'normalized_mean_vertex_betweenness',#
+                                     #'edge_betweenness',
+                                     'mean_edge_betweenness',
+                                     'global_clustering_coefficient',
+                                     'avg_clustering_coefficient',
+                                     'local_clustering_coefficient',
+                                     'weighted_clustering_coefficient',
+                                     'normalized_median_degree', #
+                                     'median_degree',
+                                     'number_of_words')
+                                            
+
+```
+
+```{r}
+for (i in c(1:14)){
+  name = paste("Graph for",rownames(Objects_study_babies)[i])
+  filename = paste(rownames(Objects_study_babies)[i],"_graph.csv")
+  baby = colnames(Objects_study_babies)[as.logical(Objects_study_babies[i,])]
+  baby = sort(baby)
+  babysubset = CC[rownames(CC)%in%baby,colnames(CC)%in%baby]
+  babymatrix = as.matrix(babysubset)
+  babygraph = graph_from_adjacency_matrix(babymatrix, weighted=TRUE, mode="plus")
+  babygraph=simplify(babygraph, remove.multiple = TRUE, remove.loops = TRUE, edge.attr.comb = igraph_opt("edge.attr.comb"))
+  plot(babygraph, vertex.size = 20, vertex.color="SkyBlue2",vertex.frame.color=NA,vertex.label.cex = .5,vertex.label.color="black", edge.arrow.size = 0,edge.curve=FALSE,edge.label=E(babygraph)$weight,edge.label.cex = .3,edge.label.color="black",rescale=TRUE, main = name, layout = layout.fruchterman.reingold)
+  
+  #write.csv(babymatrix,file=filename)
+  
+  #layout.graphopt
+  #layout.fruchterman.reingold
+  
+  
+  # computations
+  graph_parameters_babies[i,1] = edge_density(babygraph)
+  graph_parameters_babies[i,2] = edge.connectivity(babygraph)
+#  graph_parameters_babies[i,3] = eccentricity(babygraph, vids = V(babygraph))
+  graph_parameters_babies[i,3] = mean(eccentricity(babygraph, vids = V(babygraph)))
+#  graph_parameters_babies[i,4] = diversity(babygraph, weights = E(babygraph)$weight, vids = V(babygraph))
+  #graph_parameters_babies[i,4] = mean(diversity(babygraph, weights = E(babygraph)$weight, vids = V(babygraph)))
+  graph_parameters_babies[i,5] = average.path.length(babygraph, unconnected = TRUE)
+#  graph_parameters_babies[i,6] = distances(babygraph)
+  graph_parameters_babies[i,7] = mean(distances(babygraph))
+#  graph_parameters_babies[i,8] = degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE)
+#  graph_parameters_babies[i,8] = degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE)
+  graph_parameters_babies[i,8] = mean(degree(babygraph, v = V(babygraph), loops = FALSE, normalized = TRUE))
+  graph_parameters_babies[i,9] = mean(degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE))
+                                       #ADD MEDIAN
+  graph_parameters_babies[i,10] = vertex_connectivity(babygraph, source = NULL, target = NULL, checks = TRUE)
+  graph_parameters_babies[i,11] = cohesion(babygraph)
+#  graph_parameters_babies[i,12] = cocitation(babygraph, v = V(babygraph))
+  graph_parameters_babies[i,12] = mean(cocitation(babygraph, v = V(babygraph)))
+#  graph_parameters_babies[i,13] = strength(babygraph, loops = FALSE)
+  graph_parameters_babies[i,13] = mean(strength(babygraph, loops = FALSE))
+#  graph_parameters_babies[i,13] = components(babygraph)
+  graph_parameters_babies[i,14] = count_components(babygraph)
+#  graph_parameters_babies[i,15] = closeness(babygraph, vids = V(babygraph), weights = E(babygraph)$weight, normalized = FALSE)
+#  graph_parameters_babies[i,15] = closeness(babygraph, vids = V(babygraph), weights = E(babygraph)$weight, normalized = TRUE)
+  graph_parameters_babies[i,15] = mean(closeness(babygraph, vids = V(babygraph), weights = E(babygraph)$weight, normalized = FALSE))
+  graph_parameters_babies[i,16] = mean(closeness(babygraph, vids = V(babygraph), weights = E(babygraph)$weight, normalized = TRUE))
+#  graph_parameters_babies[i,16] = betweenness(babygraph, v = V(babygraph), directed = FALSE, weights = E(babygraph)$weight, normalized = FALSE)
+#  graph_parameters_babies[i,16] = betweenness(babygraph, v = V(babygraph), directed = FALSE, weights = E(babygraph)$weight, normalized = TRUE)
+  graph_parameters_babies[i,17] = mean(betweenness(babygraph, v = V(babygraph), directed = FALSE, weights = E(babygraph)$weight, normalized = FALSE))
+  graph_parameters_babies[i,18] = mean(betweenness(babygraph, v = V(babygraph), directed = FALSE, weights = E(babygraph)$weight, normalized = TRUE))
+  #add normalized^
+#  graph_parameters_babies[i,17] = edge_betweenness(babygraph, e = E(babygraph), directed = FALSE, weights = E(babygraph)$weight))
+  graph_parameters_babies[i,19] = mean(edge_betweenness(babygraph, e = E(babygraph), directed = FALSE, weights = E(babygraph)$weight))
+  # Global clustering coefficient
+  graph_parameters_babies[i,20] = transitivity(babygraph)
+  # Average clustering coefficient
+  graph_parameters_babies[i,21] = transitivity(babygraph, type = "average")
+  # The same as above
+  graph_parameters_babies[i,22] = mean(transitivity(babygraph, type = "local"), na.rm = TRUE)
+  graph_parameters_babies[i,23] = mean(transitivity(babygraph, type = "barrat"), na.rm = TRUE)
+  graph_parameters_babies[i,24] = median(degree(babygraph, v = V(babygraph), loops = FALSE, normalized = TRUE))
+  graph_parameters_babies[i,25] = median(degree(babygraph, v = V(babygraph), loops = FALSE, normalized = FALSE))
+  graph_parameters_babies[i,26] = gorder(babygraph)
+
+  
+  rownames(graph_parameters_babies)[i]=rownames(Objects_study_babies)[i]
+
+}
+```
+
+```{r}
+graph_parameters_babies # before simplify
+```
+```{r}
+graph_parameters_babies # after simplify
+
+```
+
+```{r}
+graph_parameters_babies
+write.csv(graph_parameters_babies,file = "IndividualGraphParameters.csv")
+y=as.matrix(graph_parameters_babies)
+colnames(y)=c(1:26)
+rownames(y)=c(1:14)
+write.csv(y,file = "IndividualGraphParameters_noLabels.csv")
+```
+
+```{r}
+baby = colnames(Objects_study_babies)[as.logical(Objects_study_babies[8,])]
+  baby = sort(baby)
+  babysubset = CC[rownames(CC)%in%baby,colnames(CC)%in%baby]
+  babymatrix = as.matrix(babysubset)
+  babygraph = graph_from_adjacency_matrix(babymatrix, weighted=TRUE, mode="plus")
+  babygraph=simplify(babygraph, remove.multiple = TRUE, remove.loops = TRUE, edge.attr.comb = igraph_opt("edge.attr.comb"))
+  
+x=distances(babygraph)
+x[is.infinite(x)]=NA
+mean(x, na.rm = TRUE)
+graph_parameters_babies[8,7] = mean(x, na.rm = TRUE)
+graph_parameters_babies
+```
+
+```{r}
+# dealing with Inf
+A[is.infinite(A)]<-NA
+rowSums(A,na.rm=TRUE)
+
+```
+
+
+```{r}
+['edge_density', 'edge_connectivity', 'mean_eccentricity', 'mean_diversity', 'mean_path_length', 'distance', 'mean_distance', 'normalized_mean_degree', 'mean_degree', 'vertex_connectivity', 'cohesion', 'mean_cocitation', 'mean_strength', 'component_count', 'normalized_mean_closeness', 'mean_closeness', 'mean_vertex_betweenness', 'normalized_mean_vertex_betweenness', 'mean_edge_betweenness', 'global_clustering_coefficient', 'avg_clustering_coefficient', 'local_clustering_coefficient', 'weighted_clustering_coefficient', 'normalized_median_degree', 'median_degree', 'number_of_words']
+```
+
+
+```{r}
+  baby = colnames(Objects_study_babies)[as.logical(Objects_study_babies[8,])]
+  baby = sort(baby)
+  babysubset = CC[rownames(CC)%in%baby,rownames(CC)%in%baby]
+  babymatrix = as.matrix(babysubset)
+  babygraph = graph_from_adjacency_matrix(babymatrix, weighted=TRUE, mode="plus")
+  babygraph=simplify(babygraph, remove.multiple = FALSE, remove.loops = TRUE, edge.attr.comb = igraph_opt("edge.attr.comb"))
+```
+
+```{r}
+plot(vocab_studybabies, graph_parameters_babies$median_degree,type = "p")
+plot(vocab_studybabies, graph_parameters_babies$mean_distance,type = "p")
+plot(vocab_studybabies, graph_parameters_babies$mean_path_length,type = "p")
+plot(vocab_studybabies, graph_parameters_babies$avg_clustering_coefficient,type = "p")
+plot(vocab_studybabies, graph_parameters_babies$global_clustering_coefficient,type = "p")
+
+```
+
+```{r}
+library("ggpubr")
+
+```
+
+```{r}
+
+my_data = data.frame(vocab = vocab_studybabies, network_size = graph_parameters_babies$number_of_words, median_degree = graph_parameters_babies$median_degree, normalized_median_degree = graph_parameters_babies$normalized_median_degree ,mean_weighted_distance = graph_parameters_babies$mean_distance, mean_path_length = graph_parameters_babies$mean_path_length, average_clustering_coefficient = graph_parameters_babies$avg_clustering_coefficient, global_clustering_coefficient = graph_parameters_babies$global_clustering_coefficient )
+my_data$vocab[13:14] = c(27,5)
+rownames(my_data)[13:14] = c('SD139','SD141')
+``` 
+
+```{r}
+vXmd = ggscatter(my_data, x = "vocab", y = "median_degree", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Median Degree")
+```
+
+```{r}
+vXnmd = ggscatter(my_data, x = "vocab", y = "normalized_median_degree", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Normalized Median Degree", title = 'Correlating Median Degree with Vocabulary Size')
+```
+
+
+```{r}
+vXmwd = ggscatter(my_data, x = "vocab", y = "mean_weighted_distance", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Mean Weighted Distance Between Words")
+```
+
+```{r}
+vXpl = ggscatter(my_data, x = "vocab", y = "mean_path_length", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Mean Path Length Between Words")
+```
+
+```{r}
+vXacc = ggscatter(my_data, x = "vocab", y = "average_clustering_coefficient", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Average Clustering Coefficient")
+```
+
+```{r}
+vXgcc = ggscatter(my_data, x = "vocab", y = "global_clustering_coefficient", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Vocabulary Size (# of words)", ylab = "Global Clustering Coefficient")
+```
+
+```{r}
+ggarrange(vXmd, vXpl, vXgcc,
+          labels = c("A", "B", "C"),
+          ncol = 3, nrow = 1)
+
+```
+
